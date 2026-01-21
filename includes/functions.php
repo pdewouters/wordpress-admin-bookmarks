@@ -118,7 +118,7 @@ function admin_bookmarks_is_post_bookmarked( $post_id = 0, $user = false ) {
  * @param int           $post_id Post ID to add.
  * @param WP_User|false $user    Optional. User object to update. Defaults to current user.
  *
- * @return void
+ * @return bool True if bookmark was added, false if already exists or limit reached.
  */
 function admin_bookmarks_add_bookmark( $post_id = 0, $user = false ) {
     $post_id = ( 0 === $post_id ) ? get_the_ID() : $post_id;
@@ -126,11 +126,20 @@ function admin_bookmarks_add_bookmark( $post_id = 0, $user = false ) {
 
     $bookmarks = admin_bookmarks_get_bookmarks( $user );
 
-    if ( ! array_key_exists( $post_id, $bookmarks ) ) {
-        $bookmarks[ $post_id ] = $post_id;
+    // Already bookmarked - no need to check limit.
+    if ( array_key_exists( $post_id, $bookmarks ) ) {
+        return true;
     }
 
+    // Check if user is at limit before adding new bookmark.
+    if ( ! admin_bookmarks_can_add_bookmark( $user ) ) {
+        return false;
+    }
+
+    $bookmarks[ $post_id ] = $post_id;
     update_user_meta( $user->ID, ADMIN_BOOKMARKS_SLUG, $bookmarks );
+
+    return true;
 }
 
 /**
@@ -159,7 +168,7 @@ function admin_bookmarks_remove_bookmark( $post_id = 0, $user = false ) {
  * @param int           $post_id Post ID to toggle.
  * @param WP_User|false $user    Optional. User object to update. Defaults to current user.
  *
- * @return bool True when the post is bookmarked after the toggle, false otherwise.
+ * @return bool|null True when bookmarked after toggle, false when removed, null if add failed (limit reached).
  */
 function admin_bookmarks_toggle_bookmark( $post_id = 0, $user = false ) {
     if ( admin_bookmarks_is_post_bookmarked( $post_id, $user ) ) {
@@ -168,9 +177,9 @@ function admin_bookmarks_toggle_bookmark( $post_id = 0, $user = false ) {
         return false;
     }
 
-    admin_bookmarks_add_bookmark( $post_id, $user );
+    $added = admin_bookmarks_add_bookmark( $post_id, $user );
 
-    return true;
+    return $added ? true : null;
 }
 
 /**
@@ -434,4 +443,49 @@ function admin_bookmarks_get_bookmark_groups( $force_refresh = false ) {
  */
 function admin_bookmarks_reset_bookmark_groups() {
     admin_bookmarks_get_bookmark_groups( true );
+}
+
+/**
+ * Retrieve the maximum number of bookmarks allowed for a user.
+ *
+ * @since 1.0.2
+ *
+ * @param WP_User|false $user Optional. User object to check. Defaults to current user.
+ *
+ * @return int Maximum bookmarks allowed. 0 means unlimited.
+ */
+function admin_bookmarks_get_max_bookmarks( $user = false ) {
+    $user = ( false === $user ) ? wp_get_current_user() : $user;
+
+    /**
+     * Filters the maximum number of bookmarks allowed per user.
+     *
+     * @since 1.0.2
+     *
+     * @param int     $max  Maximum bookmarks allowed. 0 means unlimited. Default 0.
+     * @param WP_User $user The user object being checked.
+     */
+    return (int) apply_filters( 'admin_bookmarks_max_per_user', 0, $user );
+}
+
+/**
+ * Determine whether a user can add more bookmarks.
+ *
+ * @since 1.0.2
+ *
+ * @param WP_User|false $user Optional. User object to check. Defaults to current user.
+ *
+ * @return bool True if user can add more bookmarks, false if at limit.
+ */
+function admin_bookmarks_can_add_bookmark( $user = false ) {
+    $user = ( false === $user ) ? wp_get_current_user() : $user;
+    $max  = admin_bookmarks_get_max_bookmarks( $user );
+
+    if ( $max <= 0 ) {
+        return true; // Unlimited.
+    }
+
+    $current_count = count( admin_bookmarks_get_bookmarks( $user ) );
+
+    return $current_count < $max;
 }

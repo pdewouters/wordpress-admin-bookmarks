@@ -9,6 +9,8 @@
 	var menuHandle = config.handle || '';
 	var menuDataset = window.AdminBookmarksMenuData || { menus: [] };
 	var quickEditPatched = false;
+	var atLimit = !!config.atLimit;
+	var limitMessage = config.limitMessage || '';
 
 	function escapeHtml(text) {
 		var div = document.createElement('div');
@@ -211,8 +213,41 @@
 		observer.observe(list, { childList: true });
 	}
 
+	function updateBookmarkButtonsState() {
+		document.querySelectorAll('a.admin-bookmarks-icon').forEach(function (anchor) {
+			var isBookmarked = anchor.classList.contains('bookmarked');
+
+			if (atLimit && !isBookmarked) {
+				anchor.classList.add('disabled');
+				if (limitMessage) {
+					anchor.setAttribute('title', limitMessage);
+				}
+			} else {
+				anchor.classList.remove('disabled');
+				if (!isBookmarked) {
+					anchor.setAttribute('title', anchor.getAttribute('data-original-title') || '');
+				}
+			}
+		});
+	}
+
 	function handleToggleSuccess(postId, response) {
-		if (!response || typeof response !== 'object' || !window.AdminBookmarksMenu || typeof window.AdminBookmarksMenu.setMenus !== 'function') {
+		if (!response || typeof response !== 'object') {
+			return;
+		}
+
+		// Update limit state from server response.
+		if (typeof response.atLimit !== 'undefined') {
+			atLimit = !!response.atLimit;
+		}
+
+		// Limit reached - bookmark was not added.
+		if (response.limitReached) {
+			updateBookmarkButtonsState();
+			return;
+		}
+
+		if (!window.AdminBookmarksMenu || typeof window.AdminBookmarksMenu.setMenus !== 'function') {
 			return;
 		}
 
@@ -233,11 +268,19 @@
 		if (typeof AdminBookmarks.highlightCurrentMenuItem === 'function') {
 			AdminBookmarks.highlightCurrentMenuItem();
 		}
+
+		// Update button states after successful toggle.
+		updateBookmarkButtonsState();
 	}
 
 	function toggleBookmark(anchor) {
 		var postId = anchor.getAttribute('data-post_id');
 		if (!postId || anchor.classList.contains('is-processing')) {
+			return;
+		}
+
+		// Prevent adding when at limit (but allow removing).
+		if (anchor.classList.contains('disabled')) {
 			return;
 		}
 
@@ -314,6 +357,7 @@
 		AdminBookmarks.bindStars();
 		enhanceQuickEdit();
 		observeListTable();
+		updateBookmarkButtonsState();
 	};
 
 	if (document.readyState === 'loading') {

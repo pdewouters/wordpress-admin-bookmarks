@@ -99,6 +99,7 @@ class Admin_Bookmarks_Main {
         $screen         = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
         $screen_type    = ( $screen && $screen->post_type ) ? $screen->post_type : 'post';
         $menu_handle    = admin_bookmarks_get_menu_handle( $screen_type );
+        $max_bookmarks  = admin_bookmarks_get_max_bookmarks();
 
         wp_localize_script(
             'admin-bookmarks-post-listing',
@@ -107,6 +108,11 @@ class Admin_Bookmarks_Main {
                 'nonce'         => wp_create_nonce( ADMIN_BOOKMARKS_SLUG ),
                 'untitledLabel' => $untitled_label,
                 'handle'        => $menu_handle,
+                'atLimit'       => ! admin_bookmarks_can_add_bookmark(),
+                'limitMessage'  => $max_bookmarks > 0
+                    /* translators: %d: maximum number of bookmarks allowed */
+                    ? sprintf( __( 'Bookmark limit reached (%d max)', 'admin-bookmarks' ), $max_bookmarks )
+                    : '',
             )
         );
     }
@@ -250,30 +256,47 @@ class Admin_Bookmarks_Main {
 
         $bookmarked = admin_bookmarks_toggle_bookmark( $post_id );
 
+        // Bookmark was successfully added.
         if ( true === $bookmarked && $post instanceof WP_Post ) {
             wp_send_json(
                 array(
-                    'post_id' => $post_id,
-                    'removed' => false,
-                    'item'    => array(
-                        'post_id' => (int) $post_id,
-                        'url'     => esc_url_raw( admin_bookmarks_get_edit_post_url( $post ) ),
-                        'label'   => admin_bookmarks_build_menu_item_content( $post_id, $post->post_title ),
-                        'handle'  => $handle,
-                        'href'    => $href,
+                    'post_id'  => $post_id,
+                    'removed'  => false,
+                    'atLimit'  => ! admin_bookmarks_can_add_bookmark(),
+                    'item'     => array(
+                        'post_id'   => (int) $post_id,
+                        'url'       => esc_url_raw( admin_bookmarks_get_edit_post_url( $post ) ),
+                        'label'     => admin_bookmarks_build_menu_item_content( $post_id, $post->post_title ),
+                        'handle'    => $handle,
+                        'href'      => $href,
                         'post_type' => $post->post_type,
                     ),
                 )
             );
         }
 
-        wp_send_json( array(
-            'post_id' => $post_id,
-            'removed' => true,
-            'handle'    => $handle,
-            'post_type' => $post instanceof WP_Post ? $post->post_type : '',
-            'href'      => $href,
-        ) );
+        // Limit reached - bookmark was not added.
+        if ( null === $bookmarked ) {
+            wp_send_json(
+                array(
+                    'post_id'      => $post_id,
+                    'limitReached' => true,
+                    'atLimit'      => true,
+                )
+            );
+        }
+
+        // Bookmark was removed.
+        wp_send_json(
+            array(
+                'post_id'   => $post_id,
+                'removed'   => true,
+                'atLimit'   => ! admin_bookmarks_can_add_bookmark(),
+                'handle'    => $handle,
+                'post_type' => $post instanceof WP_Post ? $post->post_type : '',
+                'href'      => $href,
+            )
+        );
     }
 
     /**
