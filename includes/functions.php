@@ -448,7 +448,7 @@ function admin_bookmarks_reset_bookmark_groups() {
 /**
  * Retrieve the maximum number of bookmarks allowed for a user.
  *
- * @since 1.0.2
+ * @since 1.0.1
  *
  * @param WP_User|false $user Optional. User object to check. Defaults to current user.
  *
@@ -460,7 +460,7 @@ function admin_bookmarks_get_max_bookmarks( $user = false ) {
     /**
      * Filters the maximum number of bookmarks allowed per user.
      *
-     * @since 1.0.2
+     * @since 1.0.1
      *
      * @param int     $max  Maximum bookmarks allowed. 0 means unlimited. Default 0.
      * @param WP_User $user The user object being checked.
@@ -469,9 +469,41 @@ function admin_bookmarks_get_max_bookmarks( $user = false ) {
 }
 
 /**
+ * Count active bookmarks matching supported post types.
+ *
+ * @since 1.0.1
+ *
+ * @param WP_User|false $user Optional. User object to check. Defaults to current user.
+ *
+ * @return int Number of active bookmarks matching supported post types.
+ */
+function admin_bookmarks_count_active_bookmarks( $user = false ) {
+    $bookmarks = admin_bookmarks_get_bookmarks( $user );
+
+    if ( empty( $bookmarks ) ) {
+        return 0;
+    }
+
+    $post_types = admin_bookmarks_get_supported_post_types( 'names' );
+
+    if ( empty( $post_types ) ) {
+        return 0;
+    }
+
+    $count = 0;
+    foreach ( array_keys( $bookmarks ) as $post_id ) {
+        if ( in_array( get_post_type( $post_id ), $post_types, true ) ) {
+            $count++;
+        }
+    }
+
+    return $count;
+}
+
+/**
  * Determine whether a user can add more bookmarks.
  *
- * @since 1.0.2
+ * @since 1.0.1
  *
  * @param WP_User|false $user Optional. User object to check. Defaults to current user.
  *
@@ -485,7 +517,7 @@ function admin_bookmarks_can_add_bookmark( $user = false ) {
         return true; // Unlimited.
     }
 
-    $current_count = count( admin_bookmarks_get_bookmarks( $user ) );
+    $current_count = admin_bookmarks_count_active_bookmarks( $user );
 
     return $current_count < $max;
 }
