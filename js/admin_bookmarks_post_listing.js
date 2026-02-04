@@ -241,12 +241,6 @@
 			atLimit = !!response.atLimit;
 		}
 
-		// Limit reached - bookmark was not added.
-		if (response.limitReached) {
-			updateBookmarkButtonsState();
-			return;
-		}
-
 		if (!window.AdminBookmarksMenu || typeof window.AdminBookmarksMenu.setMenus !== 'function') {
 			return;
 		}
@@ -268,9 +262,6 @@
 		if (typeof AdminBookmarks.highlightCurrentMenuItem === 'function') {
 			AdminBookmarks.highlightCurrentMenuItem();
 		}
-
-		// Update button states after successful toggle.
-		updateBookmarkButtonsState();
 	}
 
 	function toggleBookmark(anchor) {
@@ -323,6 +314,8 @@
 				} else if (data && data.item) {
 					anchor.classList.add('bookmarked');
 				}
+				// Update button states after successful toggle.
+				updateBookmarkButtonsState();
 			})
 			.catch(function (error) {
 				if (window.console && typeof window.console.error === 'function') {
